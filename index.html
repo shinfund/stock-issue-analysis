@@ -343,7 +343,7 @@ let IS_DEMO  = false;
 let IS_LOADING = false;
 
 // ── 날짜별 탭 ──
-let DATE_YEAR = '', DATE_MONTH = '', DATE_DAY = '';
+let DATE_YEAR = '', DATE_MONTH = '', DATE_DAY = null;
 
 // ── 날짜 필터 (빈도·강도·섹터·종목 탭 공통) ──
 let FILT_YEAR = null, FILT_MONTH = null, FILT_DAY = null;
@@ -704,7 +704,7 @@ function renderByDate(){
   const months=DATE_YEAR?getMonths(allDates,DATE_YEAR):[];
   if(!DATE_MONTH&&months.length) DATE_MONTH=months[0];
   const days=DATE_MONTH?getDays(allDates,DATE_MONTH):[];
-  if(!DATE_DAY&&days.length) DATE_DAY=days[0];
+  if(DATE_DAY===null&&days.length) DATE_DAY=days[0];
 
   const rows=DATE_DAY?ISSUES.filter(r=>r.date===DATE_DAY).sort((a,b)=>(b.score??-999)-(a.score??-999)):[];
 
@@ -1021,7 +1021,7 @@ const DEMO_ISSUES=[
 
 function loadDemo(reason){
   FILT_YEAR=null; FILT_MONTH=''; FILT_DAY='';
-  DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
+  DATE_YEAR=''; DATE_MONTH=''; DATE_DAY=null;
   SEL_STRENGTH=''; SEL_SECTOR=''; SEL_STOCK=''; STOCK_Q='';
   IS_DEMO=true; IS_LOADING=false; ISSUES=DEMO_ISSUES.slice();
   const lu=document.getElementById('lastUpdate'); if(lu){ lu.textContent='● 데모 데이터 (미연결)'; lu.style.color='rgba(255,214,150,.95)'; }
@@ -1042,7 +1042,7 @@ async function loadData(){
     const pages=await fetchAllPages(CFG.issueDbId,[{property:'날짜',direction:'descending'}]);
     IS_DEMO=false; IS_LOADING=false;
     ISSUES=parseIssues(pages);
-    DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
+    DATE_YEAR=''; DATE_MONTH=''; DATE_DAY=null;
     FILT_YEAR=null; FILT_MONTH=''; FILT_DAY='';
     SEL_STRENGTH=''; SEL_SECTOR=''; SEL_STOCK=''; STOCK_Q='';
     renderByTab();
