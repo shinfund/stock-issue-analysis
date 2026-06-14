@@ -822,7 +822,15 @@ function renderBySector(){
 // ════════════════════════════════════════════════
 // 탭 4 — 종목별
 // ════════════════════════════════════════════════
-function setStockQ(v){ STOCK_Q=v; SEL_STOCK=''; renderByStock(); }
+let _isComposing = false;
+function setStockQ(v, done){
+  STOCK_Q=v; SEL_STOCK='';
+  if(!_isComposing||done){
+    renderByStock();
+    const inp=document.querySelector('#panel-bystock .search-box');
+    if(inp){inp.focus();const l=inp.value.length;inp.setSelectionRange(l,l);}
+  }
+}
 function jumpStock(name){ SEL_STOCK=name; STOCK_Q=''; switchTab('bystock'); }
 function jumpSector(s){ SEL_SECTOR=s; switchTab('bysector'); }
 function selectStock(name){ SEL_STOCK=name; renderByStock(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -844,7 +852,7 @@ function renderByStock(){
   +'<div class="toolbar"><div class="f-row" style="gap:8px;align-items:center;flex-wrap:wrap">'
   +periodSelHtml()
   +filtDateSelHtml()
-  +'<input class="search-box" type="text" placeholder="종목명·코드 검색" value="'+esc(STOCK_Q||'')+'" oninput="setStockQ(this.value)"/>'
+  +'<input class="search-box" type="text" placeholder="종목명·코드 검색" value="'+esc(STOCK_Q||'')+'" oncompositionstart="_isComposing=true" oncompositionend="_isComposing=false;setStockQ(this.value,true)" oninput="setStockQ(this.value)"/>'
   +(STOCK_Q||SEL_STOCK?'<button class="reset-btn" onclick="STOCK_Q=\'\';SEL_STOCK=\'\';renderByStock()">초기화</button>':'')
   +'</div></div>';
 
