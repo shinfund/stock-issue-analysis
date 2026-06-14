@@ -520,10 +520,7 @@ function filtDateSelHtml(){
     +'<select class="sel" onchange="setFiltDay(this.value)">'+dayOpts+'</select>';
 }
 function setFiltYear(y){
-  FILT_YEAR=y; FILT_MONTH=null; FILT_DAY=null;
-  const allDates=getPeriodDates();
-  const months=getMonths(allDates,y);
-  if(months.length){ FILT_MONTH=months[0]; const days=getDays(allDates,months[0]); if(days.length) FILT_DAY=days[0]; }
+  FILT_YEAR=y; FILT_MONTH=''; FILT_DAY='';
   renderByTab();
 }
 function setFiltMonth(m){
@@ -539,7 +536,7 @@ function getPeriodDates(){
 }
 function setPeriod(p){
   SEL_PERIOD=p;
-  FILT_YEAR=null; FILT_MONTH=null; FILT_DAY=null;
+  FILT_YEAR=null; FILT_MONTH=''; FILT_DAY='';
   DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
   renderByTab();
 }
@@ -1023,7 +1020,7 @@ const DEMO_ISSUES=[
 ];
 
 function loadDemo(reason){
-  FILT_YEAR=null; FILT_MONTH=null; FILT_DAY=null;
+  FILT_YEAR=null; FILT_MONTH=''; FILT_DAY='';
   DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
   SEL_STRENGTH=''; SEL_SECTOR=''; SEL_STOCK=''; STOCK_Q='';
   IS_DEMO=true; IS_LOADING=false; ISSUES=DEMO_ISSUES.slice();
@@ -1046,7 +1043,7 @@ async function loadData(){
     IS_DEMO=false; IS_LOADING=false;
     ISSUES=parseIssues(pages);
     DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
-    FILT_YEAR=null; FILT_MONTH=null; FILT_DAY=null;
+    FILT_YEAR=null; FILT_MONTH=''; FILT_DAY='';
     SEL_STRENGTH=''; SEL_SECTOR=''; SEL_STOCK=''; STOCK_Q='';
     renderByTab();
     updateCfgStatus(true);
