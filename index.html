@@ -78,7 +78,7 @@ body{font-family:'Pretendard',-apple-system,sans-serif;font-size:15px;line-heigh
 .sel:focus,.search-box:focus{border-color:var(--sky);box-shadow:0 0 0 3px rgba(55,138,221,.1)}
 .sel.active{border-color:var(--sky);color:var(--sky600);font-weight:700;background:var(--sky50)}
 .search-box{flex:1;min-width:140px}
-.period-sel{padding:7px 13px;border-radius:20px;border:1.5px solid var(--sky100);font-size:13px;font-weight:700;font-family:inherit;color:var(--sky600);background:var(--sky50);outline:none;cursor:pointer}
+.period-sel{padding:7px 13px;border-radius:20px;border:1.5px solid var(--sky100);font-size:13px;font-weight:700;font-family:inherit;color:var(--sky600);background:var(--sky50);outline:none;cursor:pointer;min-height:44px;touch-action:manipulation}
 .period-sel:focus{border-color:var(--sky);box-shadow:0 0 0 3px rgba(55,138,221,.1)}
 .reset-btn{background:var(--bg);border:1.5px solid var(--border);color:var(--txt2);border-radius:var(--r8);padding:8px 13px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;min-height:44px;touch-action:manipulation}
 .reset-btn:hover{border-color:var(--coral);color:var(--coral)}
@@ -193,7 +193,7 @@ tbody tr.clickable{cursor:pointer}
   .toolbar{padding:10px 11px}
   .sc{padding:12px 12px}
   .sc-title{font-size:14px;margin-bottom:10px}
-  .sel,.search-box,.reset-btn{font-size:13px;padding:7px 10px;min-height:40px}
+  .sel,.search-box,.reset-btn,.period-sel{font-size:13px;padding:7px 10px;min-height:40px}
   .sel{flex:1;min-width:82px}
   .search-box{min-width:120px}
   .kpi-row{gap:6px;margin-bottom:12px}
@@ -358,6 +358,10 @@ let SEL_SECTOR = '';
 let STOCK_Q  = '';
 let SEL_STOCK = '';
 
+// ── 기간 ──
+let SEL_PERIOD = '5';
+const PERIOD_OPTS = ['5','20','60','120','전체'];
+
 // ── 옵션 ──
 const SECTORS   = ['AI반도체','전력인프라','원전·SMR','방산·드론','조선·해양','바이오·제약','로봇·자동화','자율주행','2차전지','우주·항공','수소·친환경','양자','기타'];
 const TRIGS     = ['실적','수주','정책','글로벌증시','수급','테마','기타'];
@@ -478,7 +482,8 @@ function friendlyErr(msg){ msg=msg||'오류'; if(/401|403/.test(msg)) return '�
 // ════════════════════════════════════════════════
 function getFilteredRows(){
   if(!ISSUES.length) return [];
-  let rows=ISSUES.slice();
+  const pd=new Set(getPeriodDates());
+  let rows=ISSUES.filter(r=>pd.has(r.date));
   if(FILT_YEAR)  rows=rows.filter(r=>r.date.startsWith(FILT_YEAR));
   if(FILT_MONTH) rows=rows.filter(r=>r.date.startsWith(FILT_MONTH));
   if(FILT_DAY)   rows=rows.filter(r=>r.date===FILT_DAY);
@@ -492,7 +497,7 @@ function filtDateLabel(){
 }
 function ensureFiltDefaults(){
   if(!ISSUES.length) return;
-  const allDates=distinctDatesDesc(ISSUES);
+  const allDates=getPeriodDates();
   const years=getYears(allDates);
   if(FILT_YEAR===null&&years.length) FILT_YEAR=years[0];
   const months=FILT_YEAR?getMonths(allDates,FILT_YEAR):[];
@@ -501,7 +506,7 @@ function ensureFiltDefaults(){
   if(FILT_DAY===null&&days.length) FILT_DAY=days[0];
 }
 function filtDateSelHtml(){
-  const allDates=distinctDatesDesc(ISSUES);
+  const allDates=getPeriodDates();
   const years=getYears(allDates);
   const months=FILT_YEAR?getMonths(allDates,FILT_YEAR):[];
   const days=FILT_MONTH?getDays(allDates,FILT_MONTH):[];
@@ -516,17 +521,33 @@ function filtDateSelHtml(){
 }
 function setFiltYear(y){
   FILT_YEAR=y; FILT_MONTH=null; FILT_DAY=null;
-  const allDates=distinctDatesDesc(ISSUES);
+  const allDates=getPeriodDates();
   const months=getMonths(allDates,y);
   if(months.length){ FILT_MONTH=months[0]; const days=getDays(allDates,months[0]); if(days.length) FILT_DAY=days[0]; }
   renderByTab();
 }
 function setFiltMonth(m){
-  if(m){ FILT_MONTH=m; FILT_DAY=null; const days=getDays(distinctDatesDesc(ISSUES),m); if(days.length) FILT_DAY=days[0]; }
+  if(m){ FILT_MONTH=m; FILT_DAY=null; const days=getDays(getPeriodDates(),m); if(days.length) FILT_DAY=days[0]; }
   else { FILT_MONTH=''; FILT_DAY=''; }
   renderByTab();
 }
 function setFiltDay(d){ FILT_DAY=d; renderByTab(); }
+function getPeriodDates(){
+  const all=distinctDatesDesc(ISSUES);
+  if(!SEL_PERIOD||SEL_PERIOD==='전체') return all;
+  return all.slice(0,parseInt(SEL_PERIOD));
+}
+function setPeriod(p){
+  SEL_PERIOD=p;
+  FILT_YEAR=null; FILT_MONTH=null; FILT_DAY=null;
+  DATE_YEAR=''; DATE_MONTH=''; DATE_DAY='';
+  renderByTab();
+}
+function periodSelHtml(){
+  return '<select class="period-sel" onchange="setPeriod(this.value)">'
+    +PERIOD_OPTS.map(p=>'<option value="'+p+'"'+(SEL_PERIOD===p?' selected':'')+'>'+p+(p==='전체'?'':'일')+'</option>').join('')
+    +'</select>';
+}
 
 // ════════════════════════════════════════════════
 // 공통 이슈 카드
@@ -614,6 +635,7 @@ function renderFreq(){
 
   let html=''
   +'<div class="toolbar"><div class="f-row" style="align-items:center;gap:8px;flex-wrap:wrap">'
+  +periodSelHtml()
   +filtDateSelHtml()
   +'<span style="font-size:12px;color:var(--txt3)">'+allDates.length+'일치 · '+rows.length+'건</span>'
   +'</div></div>'
@@ -664,13 +686,13 @@ function renderFreq(){
 // ════════════════════════════════════════════════
 function setDateYear(y){
   DATE_YEAR=y; DATE_MONTH=''; DATE_DAY='';
-  const m=getMonths(distinctDatesDesc(ISSUES),y);
-  if(m.length){ DATE_MONTH=m[0]; const d=getDays(distinctDatesDesc(ISSUES),m[0]); if(d.length) DATE_DAY=d[0]; }
+  const m=getMonths(getPeriodDates(),y);
+  if(m.length){ DATE_MONTH=m[0]; const d=getDays(getPeriodDates(),m[0]); if(d.length) DATE_DAY=d[0]; }
   renderByDate();
 }
 function setDateMonth(m){
   DATE_MONTH=m; DATE_DAY='';
-  const d=getDays(distinctDatesDesc(ISSUES),m);
+  const d=getDays(getPeriodDates(),m);
   if(d.length) DATE_DAY=d[0];
   renderByDate();
 }
@@ -679,7 +701,7 @@ function setDateDay(d){ DATE_DAY=d; renderByDate(); }
 function renderByDate(){
   const panel=document.getElementById('panel-bydate');
   if(!ISSUES.length){ panel.innerHTML=IS_LOADING?skeletonHtml():emptyHtml('데이터 없음'); return; }
-  const allDates=distinctDatesDesc(ISSUES);
+  const allDates=getPeriodDates();
   const years=getYears(allDates);
   if(!DATE_YEAR&&years.length) DATE_YEAR=years[0];
   const months=DATE_YEAR?getMonths(allDates,DATE_YEAR):[];
@@ -696,7 +718,7 @@ function renderByDate(){
 
   let html=''
   +'<div class="toolbar"><div class="f-row" style="gap:7px;align-items:center;flex-wrap:wrap">'
-  +'<span style="font-size:13px;font-weight:700;color:var(--txt2)">날짜 선택</span>'
+  +periodSelHtml()
   +'<select class="sel" onchange="setDateYear(this.value)">'+yearOpts+'</select>'
   +'<select class="sel" onchange="setDateMonth(this.value)">'+monthOpts+'</select>'
   +'<select class="sel" onchange="setDateDay(this.value)">'+dayOpts+'</select>'
@@ -742,6 +764,7 @@ function renderBySector(){
 
   let html=''
   +'<div class="toolbar"><div class="f-row" style="gap:8px;align-items:center;flex-wrap:wrap">'
+  +periodSelHtml()
   +filtDateSelHtml()
   +'<select class="sel'+(SEL_SECTOR?' active':'')+'" onchange="setSector(this.value)">'
   +'<option value="">전체 섹터</option>'
@@ -822,6 +845,7 @@ function renderByStock(){
 
   let html=''
   +'<div class="toolbar"><div class="f-row" style="gap:8px;align-items:center;flex-wrap:wrap">'
+  +periodSelHtml()
   +filtDateSelHtml()
   +'<input class="search-box" type="text" placeholder="종목명·코드 검색" value="'+esc(STOCK_Q||'')+'" oninput="setStockQ(this.value)"/>'
   +(STOCK_Q||SEL_STOCK?'<button class="reset-btn" onclick="STOCK_Q=\'\';SEL_STOCK=\'\';renderByStock()">초기화</button>':'')
@@ -882,6 +906,7 @@ function renderByStrength(){
 
   let html=''
   +'<div class="toolbar"><div class="f-row" style="align-items:center;gap:8px;flex-wrap:wrap">'
+  +periodSelHtml()
   +filtDateSelHtml()
   +'<select class="sel'+(SEL_STRENGTH?' active':'')+'" onchange="setStrength(this.value)">'
   +'<option value="">전체 강도</option>'
