@@ -823,13 +823,43 @@ function renderBySector(){
 // 탭 4 — 종목별
 // ════════════════════════════════════════════════
 let _isComposing = false;
-function setStockQ(v, done){
+function setStockQ(v){
   STOCK_Q=v; SEL_STOCK='';
-  if(!_isComposing||done){
-    renderByStock();
-    const inp=document.querySelector('#panel-bystock .search-box');
-    if(inp){inp.focus();const l=inp.value.length;inp.setSelectionRange(l,l);}
+  if(_isComposing) return;
+  const resultsEl=document.getElementById('stock-results');
+  if(!resultsEl){ renderByStock(); return; }
+  if(!ISSUES.length){ resultsEl.innerHTML=''; return; }
+  const rows=getFilteredRows(), pl=filtDateLabel();
+  const stMap={};
+  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,latest:''}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.date>stMap[r.name].latest) stMap[r.name].latest=r.date; });
+  const q=(STOCK_Q||'').trim().toLowerCase();
+  let stList=Object.values(stMap).sort((a,b)=>b.cnt-a.cnt);
+  if(q) stList=stList.filter(s=>s.name.toLowerCase().includes(q)||s.code.toLowerCase().includes(q));
+  const rb=document.getElementById('stock-reset-btn');
+  if(rb) rb.style.display=(STOCK_Q||SEL_STOCK)?'':'none';
+  resultsEl.innerHTML=stockListHtml(stList,pl,q);
+}
+function stockListHtml(stList,pl,q){
+  let h='<div style="margin-bottom:8px;font-size:12.5px;color:var(--txt3)">'
+    +(q?stList.length+'개 종목 검색됨 · ':'기간 내 이슈 종목 '+stList.length+'개 · ')
+    +pl+'</div>';
+  if(!stList.length){
+    h+=emptyHtml('종목 없음','검색어를 바꾸거나 기간을 늘려보세요');
+  } else {
+    h+='<div class="tbl-wrap"><table>'
+      +'<colgroup><col style="width:28px"><col><col style="width:72px"><col style="width:55px"><col style="width:55px"><col style="width:90px"></colgroup>'
+      +'<thead><tr><th class="l t-rank">순위</th><th class="l">종목명</th><th>이슈 수</th><th>급등</th><th>급락</th><th>최근 날짜</th></tr></thead>'
+      +'<tbody>'+stList.map((s,i)=>'<tr class="clickable" onclick="selectStock(\''+esc(s.name)+'\')">'
+        +'<td class="t-rank">'+(i+1)+'</td>'
+        +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
+        +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
+        +'<td class="t-up">'+s.up+'</td>'
+        +'<td class="t-down">'+s.dn+'</td>'
+        +'<td style="font-size:12px;color:var(--txt3)">'+esc(s.latest)+'</td>'
+        +'</tr>').join('')
+      +'</tbody></table></div>';
   }
+  return h;
 }
 function jumpStock(name){ SEL_STOCK=name; STOCK_Q=''; switchTab('bystock'); }
 function jumpSector(s){ SEL_SECTOR=s; switchTab('bysector'); }
@@ -852,8 +882,8 @@ function renderByStock(){
   +'<div class="toolbar"><div class="f-row" style="gap:8px;align-items:center;flex-wrap:wrap">'
   +periodSelHtml()
   +filtDateSelHtml()
-  +'<input class="search-box" type="text" placeholder="종목명·코드 검색" value="'+esc(STOCK_Q||'')+'" oncompositionstart="_isComposing=true" oncompositionend="_isComposing=false;setStockQ(this.value,true)" oninput="setStockQ(this.value)"/>'
-  +(STOCK_Q||SEL_STOCK?'<button class="reset-btn" onclick="STOCK_Q=\'\';SEL_STOCK=\'\';renderByStock()">초기화</button>':'')
+  +'<input class="search-box" type="text" placeholder="종목명·코드 검색" value="'+esc(STOCK_Q||'')+'" oncompositionstart="_isComposing=true" oncompositionend="_isComposing=false;setStockQ(this.value)" oninput="setStockQ(this.value)"/>'
+  +'<button id="stock-reset-btn" class="reset-btn" style="display:'+(STOCK_Q||SEL_STOCK?'':'none')+'" onclick="STOCK_Q=\'\';SEL_STOCK=\'\';renderByStock()">초기화</button>'
   +'</div></div>';
 
   if(SEL_STOCK){
@@ -872,25 +902,7 @@ function renderByStock(){
       +'</div>'
       +(stIssues.length?'<div class="issue-grid">'+stIssues.map(issueCard).join('')+'</div>':emptyHtml(SEL_STOCK+' 이슈 없음',''));
   } else {
-    html+='<div style="margin-bottom:8px;font-size:12.5px;color:var(--txt3)">'
-      +(q?stList.length+'개 종목 검색됨 · ':'기간 내 이슈 종목 '+stList.length+'개 · ')
-      +pl+'</div>';
-    if(!stList.length){
-      html+=emptyHtml('종목 없음','검색어를 바꾸거나 기간을 늘려보세요');
-    } else {
-      html+='<div class="tbl-wrap"><table>'
-        +'<colgroup><col style="width:28px"><col><col style="width:72px"><col style="width:55px"><col style="width:55px"><col style="width:90px"></colgroup>'
-        +'<thead><tr><th class="l t-rank">순위</th><th class="l">종목명</th><th>이슈 수</th><th>급등</th><th>급락</th><th>최근 날짜</th></tr></thead>'
-        +'<tbody>'+stList.map((s,i)=>'<tr class="clickable" onclick="selectStock(\''+esc(s.name)+'\')">'
-          +'<td class="t-rank">'+( i+1)+'</td>'
-          +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
-          +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
-          +'<td class="t-up">'+s.up+'</td>'
-          +'<td class="t-down">'+s.dn+'</td>'
-          +'<td style="font-size:12px;color:var(--txt3)">'+esc(s.latest)+'</td>'
-          +'</tr>').join('')
-        +'</tbody></table></div>';
-    }
+    html+='<div id="stock-results">'+stockListHtml(stList,pl,q)+'</div>';
   }
   panel.innerHTML=html;
 }
