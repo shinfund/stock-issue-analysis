@@ -147,6 +147,13 @@ tbody tr.clickable{cursor:pointer}
 .ic-score{font-size:12px;font-weight:800;color:var(--purple);background:var(--purple50);padding:3px 10px;border-radius:10px}
 .ic-src{font-size:12.5px;color:var(--sky600);font-weight:700;text-decoration:none;white-space:nowrap}
 .ic-src:hover{text-decoration:underline}
+.ic-name-link{cursor:pointer;transition:color .15s}
+.ic-name-link:hover{color:var(--sky600)}
+.nav-btn{background:var(--bg);border:1.5px solid var(--border);color:var(--txt2);border-radius:var(--r8);padding:7px 13px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;min-height:44px;touch-action:manipulation}
+.nav-btn:hover:not(:disabled){border-color:var(--sky);color:var(--sky600)}
+.nav-btn:disabled{opacity:.4;cursor:not-allowed}
+.chg-pos{color:var(--red);font-weight:700}
+.chg-neg{color:var(--blue);font-weight:700}
 
 /* EMPTY / SKELETON */
 .empty{text-align:center;padding:48px 20px;color:var(--txt3)}
@@ -561,7 +568,7 @@ function issueCard(r){
   if(r.close!=null) meta.push('<span>종가 <b>'+fmtNum(r.close)+'</b></span>');
   const safeSrc=safeUrl(r.src);
   return '<div class="issue-card dir-'+esc(r.dir)+'">'
-    +'<div class="ic-top"><div class="ic-name">'+esc(r.name)+'<span class="ic-code">'+esc(r.code)+'</span></div>'
+    +'<div class="ic-top"><div class="ic-name ic-name-link" onclick="jumpStock(\''+esc(r.name)+'\')">'+esc(r.name)+'<span class="ic-code">'+esc(r.code)+'</span></div>'
     +'<div class="ic-chg '+chgCls(r.chg||0)+'">'+fmtPct(r.chg)+'</div></div>'
     +'<div class="ic-badges">'+badges.join('')+'</div>'
     +(r.summary?'<div class="ic-summary">'+esc(r.summary)+'</div>':'')
@@ -615,7 +622,7 @@ function renderFreq(){
 
   // 종목 빈도
   const stMap={};
-  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; });
+  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,chgSum:0,chgN:0}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.chg!=null&&!isNaN(r.chg)){stMap[r.name].chgSum+=r.chg;stMap[r.name].chgN++;} });
   const stTop=Object.values(stMap).sort((a,b)=>b.cnt-a.cnt).slice(0,20);
 
   // 강도·방향 분포
@@ -630,6 +637,25 @@ function renderFreq(){
       +'<div class="dist-val">'+cnt+'</div></div>';
   }
 
+  const dateCountMap={};
+  rows.forEach(function(r){ if(r.date) dateCountMap[r.date]=(dateCountMap[r.date]||0)+1; });
+  const trendDates=allDates.slice(0,20).slice().reverse();
+  const maxTrendN=Math.max(...trendDates.map(d=>dateCountMap[d]||0),1);
+  const trendHtml='<div class="sc"><div class="sc-title">날짜별 이슈 추이 <span class="sub">최근 '+trendDates.length+'일</span></div>'
+    +'<div style="display:flex;align-items:flex-end;gap:3px;height:68px">'
+    +trendDates.map(function(d){
+      var n=dateCountMap[d]||0;
+      var hp=Math.max(Math.round(n/maxTrendN*50),n>0?4:0);
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0" title="'+esc(d)+': '+n+'건">'
+        +'<span style="font-size:9px;color:var(--txt3);font-weight:600">'+(n||'')+'</span>'
+        +'<div style="width:100%;background:var(--sky);border-radius:2px 2px 0 0;height:'+hp+'px"></div>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:3px;margin-top:3px">'
+    +trendDates.map(function(d){ return '<div style="flex:1;min-width:0;font-size:9px;color:var(--txt3);text-align:center;overflow:hidden;text-overflow:ellipsis">'+esc(d.slice(5))+'</div>'; }).join('')
+    +'</div></div>';
+
   let html=''
   +'<div class="toolbar"><div class="f-row" style="align-items:center;gap:8px;flex-wrap:wrap">'
   +periodSelHtml()
@@ -637,6 +663,7 @@ function renderFreq(){
   +'<span style="font-size:12px;color:var(--txt3)">'+allDates.length+'일치 · '+rows.length+'건</span>'
   +'</div></div>'
   +kpiRow(rows)
+  +trendHtml
   +'<div class="dash-grid">'
   +'<div class="sc"><div class="sc-title">섹터 빈도순위 <span class="sub">'+pl+'</span></div>'
   +'<div class="bars">'+secTop.map(([s,cnt])=>{
@@ -657,15 +684,20 @@ function renderFreq(){
   +'</div>'
   +'<div class="sc"><div class="sc-title">종목별 이슈 빈도 <span class="sub">상위 20 · '+pl+'</span></div>'
   +'<div class="tbl-wrap"><table>'
-  +'<colgroup><col style="width:28px"><col><col style="width:70px"><col style="width:60px"><col style="width:60px"></colgroup>'
-  +'<thead><tr><th class="t-rank l">순위</th><th class="l">종목명</th><th>이슈 수</th><th>급등</th><th>급락</th></tr></thead>'
-  +'<tbody>'+stTop.map((s,i)=>'<tr class="clickable" onclick="jumpStock(\''+esc(s.name)+'\')">'
-    +'<td class="t-rank">'+( i+1)+'</td>'
-    +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
-    +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
-    +'<td class="t-up">'+(s.up||0)+'</td>'
-    +'<td class="t-down">'+(s.dn||0)+'</td>'
-    +'</tr>').join('')+'</tbody></table></div></div>'
+  +'<colgroup><col style="width:26px"><col><col style="width:50px"><col style="width:44px"><col style="width:44px"><col style="width:76px"></colgroup>'
+  +'<thead><tr><th class="t-rank l">순위</th><th class="l">종목명</th><th>이슈</th><th>급등</th><th>급락</th><th>평균 등락률</th></tr></thead>'
+  +'<tbody>'+stTop.map(function(s,i){
+    var avgChg=s.chgN>0?s.chgSum/s.chgN:null;
+    var avgStr=avgChg!=null?(avgChg>0?'<span class="chg-pos">+'+avgChg.toFixed(2)+'%</span>':'<span class="chg-neg">'+avgChg.toFixed(2)+'%</span>'):'<span style="color:var(--txt3)">-</span>';
+    return '<tr class="clickable" onclick="jumpStock(\''+esc(s.name)+'\')">'
+      +'<td class="t-rank">'+(i+1)+'</td>'
+      +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
+      +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
+      +'<td class="t-up">'+(s.up||0)+'</td>'
+      +'<td class="t-down">'+(s.dn||0)+'</td>'
+      +'<td>'+avgStr+'</td>'
+      +'</tr>';
+  }).join('')+'</tbody></table></div></div>'
   +'<div class="dash-grid">'
   +'<div class="sc"><div class="sc-title">이슈강도 분포 <span class="sub">'+pl+'</span></div><div class="dist">'
   +STRENGTHS.map(s=>strMap[s]?distBar(s,strMap[s],maxStr,safeColor(STRENGTH_COLOR[s]||'#94A3B8')):'').join('')
@@ -681,15 +713,22 @@ function renderFreq(){
 // ════════════════════════════════════════════════
 // 탭 2 — 날짜별
 // ════════════════════════════════════════════════
+function navDate(d){
+  const allD=distinctDatesDesc(ISSUES);
+  if(!allD.includes(d)) return;
+  DATE_YEAR=d.slice(0,4); DATE_MONTH=d.slice(0,7); DATE_DAY=d;
+  renderByDate();
+}
 function setDateYear(y){
   DATE_YEAR=y; DATE_MONTH=''; DATE_DAY='';
-  const m=getMonths(getPeriodDates(),y);
-  if(m.length){ DATE_MONTH=m[0]; const d=getDays(getPeriodDates(),m[0]); if(d.length) DATE_DAY=d[0]; }
+  const allDates=distinctDatesDesc(ISSUES);
+  const m=getMonths(allDates,y);
+  if(m.length){ DATE_MONTH=m[0]; const d=getDays(allDates,m[0]); if(d.length) DATE_DAY=d[0]; }
   renderByDate();
 }
 function setDateMonth(m){
   DATE_MONTH=m; DATE_DAY='';
-  const d=getDays(getPeriodDates(),m);
+  const d=getDays(distinctDatesDesc(ISSUES),m);
   if(d.length) DATE_DAY=d[0];
   renderByDate();
 }
@@ -698,7 +737,7 @@ function setDateDay(d){ DATE_DAY=d; renderByDate(); }
 function renderByDate(){
   const panel=document.getElementById('panel-bydate');
   if(!ISSUES.length){ panel.innerHTML=IS_LOADING?skeletonHtml():emptyHtml('데이터 없음'); return; }
-  const allDates=getPeriodDates();
+  const allDates=distinctDatesDesc(ISSUES);
   const years=getYears(allDates);
   if(!DATE_YEAR&&years.length) DATE_YEAR=years[0];
   const months=DATE_YEAR?getMonths(allDates,DATE_YEAR):[];
@@ -713,12 +752,18 @@ function renderByDate(){
   const dayOpts='<option value=""'+(DATE_DAY===''?' selected':'')+'>날짜 선택</option>'
     +days.map(d=>'<option value="'+d+'"'+(DATE_DAY===d?' selected':'')+'>'+d.slice(8)+'일</option>').join('');
 
+  const navAllDates=distinctDatesDesc(ISSUES);
+  const navIdx=DATE_DAY?navAllDates.indexOf(DATE_DAY):-1;
+  const prevDate=navIdx>=0&&navIdx<navAllDates.length-1?navAllDates[navIdx+1]:'';
+  const nextDate=navIdx>0?navAllDates[navIdx-1]:'';
+
   let html=''
   +'<div class="toolbar"><div class="f-row" style="gap:7px;align-items:center;flex-wrap:wrap">'
-  +periodSelHtml()
   +'<select class="sel" onchange="setDateYear(this.value)">'+yearOpts+'</select>'
   +'<select class="sel" onchange="setDateMonth(this.value)">'+monthOpts+'</select>'
   +'<select class="sel" onchange="setDateDay(this.value)">'+dayOpts+'</select>'
+  +(prevDate?'<button class="nav-btn" onclick="navDate(\''+esc(prevDate)+'\')">← 이전</button>':'<button class="nav-btn" disabled>← 이전</button>')
+  +(nextDate?'<button class="nav-btn" onclick="navDate(\''+esc(nextDate)+'\')">다음 →</button>':'<button class="nav-btn" disabled>다음 →</button>')
   +(DATE_DAY?'<span style="font-size:12px;color:var(--txt3)">'+rows.length+'건</span>':'')
   +'</div></div>';
 
@@ -731,6 +776,9 @@ function renderByDate(){
     const dn=rows.filter(r=>r.dir==='급락').length;
     const core=rows.filter(r=>r.strength==='🔴 핵심').length;
     const uniqSecs=new Set(rows.flatMap(r=>r.sector)).size;
+    const secDateMap={};
+    rows.forEach(r=>(r.sector||[]).forEach(s=>{ secDateMap[s]=(secDateMap[s]||0)+1; }));
+    const sectorSummary=Object.entries(secDateMap).sort((a,b)=>b[1]-a[1]);
     html+='<div class="kpi-row">'
       +'<div class="kpi-card kpi-tot"><div class="num">'+rows.length+'</div><div class="lbl">이슈</div></div>'
       +'<div class="kpi-card kpi-up"><div class="num">'+up+'</div><div class="lbl">급등</div></div>'
@@ -738,6 +786,11 @@ function renderByDate(){
       +'<div class="kpi-card kpi-core"><div class="num">'+core+'</div><div class="lbl">핵심</div></div>'
       +'<div class="kpi-card kpi-sec"><div class="num">'+uniqSecs+'</div><div class="lbl">섹터</div></div>'
       +'</div>'
+      +(sectorSummary.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+sectorSummary.map(function(e){
+        var s=e[0],cnt=e[1];
+        var c=safeColor(SECTOR_COLOR[s]||'#7E8CA0');
+        return '<span style="background:'+withAlpha(c)+';color:'+darkShade(c)+';border-radius:12px;font-size:12.5px;font-weight:700;padding:3px 10px;cursor:pointer" onclick="jumpSector(\''+esc(s)+'\')">'+esc(s)+' <span style="opacity:.7">'+cnt+'</span></span>';
+      }).join('')+'</div>':'')
       +'<div class="issue-grid">'+rows.map(issueCard).join('')+'</div>';
   }
   panel.innerHTML=html;
@@ -806,11 +859,18 @@ function renderBySector(){
     const secRows=rows.filter(r=>(r.sector||[]).includes(SEL_SECTOR)).sort((a,b)=>b.date.localeCompare(a.date)||(b.score??-999)-(a.score??-999));
     const c=safeColor(SECTOR_COLOR[SEL_SECTOR]||'#7E8CA0');
     const up=secRows.filter(r=>r.dir==='급등').length, dn=secRows.filter(r=>r.dir==='급락').length, core=secRows.filter(r=>r.strength==='🔴 핵심').length;
+    const secChgVals=secRows.map(r=>r.chg).filter(function(v){ return v!=null&&!isNaN(v); });
+    const secAvgChg=secChgVals.length?secChgVals.reduce(function(s,v){ return s+v; },0)/secChgVals.length:null;
+    const upChgVals=secRows.filter(r=>r.dir==='급등').map(r=>r.chg).filter(function(v){ return v!=null&&!isNaN(v); });
+    const upAvgChg=upChgVals.length?upChgVals.reduce(function(s,v){ return s+v; },0)/upChgVals.length:null;
+    const dnChgVals=secRows.filter(r=>r.dir==='급락').map(r=>r.chg).filter(function(v){ return v!=null&&!isNaN(v); });
+    const dnAvgChg=dnChgVals.length?dnChgVals.reduce(function(s,v){ return s+v; },0)/dnChgVals.length:null;
     html+='<div class="kpi-row">'
       +'<div class="kpi-card kpi-tot"><div class="num">'+secRows.length+'</div><div class="lbl">이슈</div></div>'
-      +'<div class="kpi-card kpi-up"><div class="num">'+up+'</div><div class="lbl">급등</div></div>'
-      +'<div class="kpi-card kpi-down"><div class="num">'+dn+'</div><div class="lbl">급락</div></div>'
+      +'<div class="kpi-card kpi-up"><div class="num">'+up+'</div><div class="lbl">급등</div>'+(upAvgChg!=null?'<div style="font-size:10.5px;color:var(--red);font-weight:700;margin-top:2px">평균 +'+upAvgChg.toFixed(2)+'%</div>':'')+'</div>'
+      +'<div class="kpi-card kpi-down"><div class="num">'+dn+'</div><div class="lbl">급락</div>'+(dnAvgChg!=null?'<div style="font-size:10.5px;color:var(--blue);font-weight:700;margin-top:2px">평균 '+dnAvgChg.toFixed(2)+'%</div>':'')+'</div>'
       +'<div class="kpi-card kpi-core"><div class="num">'+core+'</div><div class="lbl">핵심</div></div>'
+      +(secAvgChg!=null?'<div class="kpi-card"><div class="num" style="color:'+(secAvgChg>0?'var(--red)':'var(--blue)')+'">'+( secAvgChg>0?'+':'')+secAvgChg.toFixed(2)+'%</div><div class="lbl">평균 등락률</div></div>':'')
       +'</div>'
       +(secRows.length
         ?'<div class="issue-grid">'+secRows.map(issueCard).join('')+'</div>'
@@ -831,7 +891,7 @@ function setStockQ(v){
   if(!ISSUES.length){ resultsEl.innerHTML=''; return; }
   const rows=getFilteredRows(), pl=filtDateLabel();
   const stMap={};
-  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,latest:''}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.date>stMap[r.name].latest) stMap[r.name].latest=r.date; });
+  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,latest:'',chgSum:0,chgN:0}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.date>stMap[r.name].latest) stMap[r.name].latest=r.date; if(r.chg!=null&&!isNaN(r.chg)){stMap[r.name].chgSum+=r.chg;stMap[r.name].chgN++;} });
   const q=(STOCK_Q||'').trim().toLowerCase();
   let stList=Object.values(stMap).sort((a,b)=>b.cnt-a.cnt);
   if(q) stList=stList.filter(s=>s.name.toLowerCase().includes(q)||s.code.toLowerCase().includes(q));
@@ -847,16 +907,21 @@ function stockListHtml(stList,pl,q){
     h+=emptyHtml('종목 없음','검색어를 바꾸거나 기간을 늘려보세요');
   } else {
     h+='<div class="tbl-wrap"><table>'
-      +'<colgroup><col style="width:28px"><col><col style="width:72px"><col style="width:55px"><col style="width:55px"><col style="width:90px"></colgroup>'
-      +'<thead><tr><th class="l t-rank">순위</th><th class="l">종목명</th><th>이슈 수</th><th>급등</th><th>급락</th><th>최근 날짜</th></tr></thead>'
-      +'<tbody>'+stList.map((s,i)=>'<tr class="clickable" onclick="selectStock(\''+esc(s.name)+'\')">'
-        +'<td class="t-rank">'+(i+1)+'</td>'
-        +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
-        +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
-        +'<td class="t-up">'+s.up+'</td>'
-        +'<td class="t-down">'+s.dn+'</td>'
-        +'<td style="font-size:12px;color:var(--txt3)">'+esc(s.latest)+'</td>'
-        +'</tr>').join('')
+      +'<colgroup><col style="width:26px"><col><col style="width:50px"><col style="width:40px"><col style="width:40px"><col style="width:76px"><col style="width:72px"></colgroup>'
+      +'<thead><tr><th class="l t-rank">순위</th><th class="l">종목명</th><th>이슈</th><th>급등</th><th>급락</th><th>평균 등락률</th><th>최근 날짜</th></tr></thead>'
+      +'<tbody>'+stList.map(function(s,i){
+        var avgChg=s.chgN>0?s.chgSum/s.chgN:null;
+        var avgStr=avgChg!=null?(avgChg>0?'<span class="chg-pos">+'+avgChg.toFixed(2)+'%</span>':'<span class="chg-neg">'+avgChg.toFixed(2)+'%</span>'):'<span style="color:var(--txt3)">-</span>';
+        return '<tr class="clickable" onclick="selectStock(\''+esc(s.name)+'\')">'
+          +'<td class="t-rank">'+(i+1)+'</td>'
+          +'<td class="l t-name">'+esc(s.name)+'<span style="font-size:11.5px;color:var(--txt2);margin-left:4px">'+esc(s.code)+'</span></td>'
+          +'<td style="font-weight:800;color:var(--sky600)">'+s.cnt+'</td>'
+          +'<td class="t-up">'+s.up+'</td>'
+          +'<td class="t-down">'+s.dn+'</td>'
+          +'<td>'+avgStr+'</td>'
+          +'<td style="font-size:12px;color:var(--txt3)">'+esc(s.latest)+'</td>'
+          +'</tr>';
+      }).join('')
       +'</tbody></table></div>';
   }
   return h;
@@ -873,7 +938,7 @@ function renderByStock(){
   const pl=filtDateLabel();
 
   const stMap={};
-  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,latest:''}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.date>stMap[r.name].latest) stMap[r.name].latest=r.date; });
+  rows.forEach(r=>{ if(!r.name) return; if(!stMap[r.name]) stMap[r.name]={name:r.name,code:r.code,cnt:0,up:0,dn:0,latest:'',chgSum:0,chgN:0}; stMap[r.name].cnt++; if(r.dir==='급등') stMap[r.name].up++; if(r.dir==='급락') stMap[r.name].dn++; if(r.date>stMap[r.name].latest) stMap[r.name].latest=r.date; if(r.chg!=null&&!isNaN(r.chg)){stMap[r.name].chgSum+=r.chg;stMap[r.name].chgN++;} });
   const q=(STOCK_Q||'').trim().toLowerCase();
   let stList=Object.values(stMap).sort((a,b)=>b.cnt-a.cnt);
   if(q) stList=stList.filter(s=>s.name.toLowerCase().includes(q)||s.code.toLowerCase().includes(q));
@@ -942,10 +1007,13 @@ function renderByStrength(){
     const up=group.filter(r=>r.dir==='급등').length;
     const dn=group.filter(r=>r.dir==='급락').length;
     const uniqSecs=new Set(group.flatMap(r=>r.sector)).size;
+    const chgVals=group.map(r=>r.chg).filter(function(v){ return v!=null&&!isNaN(v); });
+    const avgChg=chgVals.length?chgVals.reduce(function(s,v){ return s+v; },0)/chgVals.length:null;
+    const avgChgStr=avgChg!=null?' · 평균 '+(avgChg>0?'<span style="color:#D8302F">+'+avgChg.toFixed(2)+'%</span>':'<span style="color:#2563C9">'+avgChg.toFixed(2)+'%</span>'):'';
     html+=''
     +'<div class="sc" style="border-top:3.5px solid '+c+'">'
     +'<div class="sc-title" style="color:'+darkShade(c)+'">'+esc(str)
-    +' <span class="sub">'+group.length+'건 · 급등 '+up+' · 급락 '+dn+' · '+uniqSecs+'섹터 · '+pl+'</span></div>'
+    +' <span class="sub">'+group.length+'건 · 급등 '+up+' · 급락 '+dn+' · '+uniqSecs+'섹터'+avgChgStr+' · '+pl+'</span></div>'
     +'<div class="issue-grid">'+group.map(issueCard).join('')+'</div>'
     +'</div>';
   });
