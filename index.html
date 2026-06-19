@@ -428,8 +428,8 @@ async function fetchNotion(dbId, body){
     return res.json();
   }finally{ clearTimeout(timer); }
 }
-async function fetchAllPages(dbId, sorts){
-  const body={page_size:100}; if(sorts) body.sorts=sorts;
+async function fetchAllPages(dbId, sorts, filter){
+  const body={page_size:100}; if(sorts) body.sorts=sorts; if(filter) body.filter=filter;
   const data=await fetchNotion(dbId,body);
   let pages=data.results||[],cursor=data.next_cursor,hasMore=data.has_more,cnt=0;
   while(cursor&&hasMore&&++cnt<200){
@@ -437,6 +437,21 @@ async function fetchAllPages(dbId, sorts){
     pages=pages.concat(d2.results||[]); cursor=d2.next_cursor; hasMore=d2.has_more;
   }
   return pages;
+}
+async function loadAllYears(dbId, sorts){
+  const now=new Date();
+  let yr=now.getFullYear(), mo=now.getMonth()+1;
+  let allPages=[], empty=0;
+  while(empty<3 && yr>=now.getFullYear()-2){
+    const ms=String(mo).padStart(2,'0');
+    const ny=mo===12?yr+1:yr, nm=mo===12?1:mo+1;
+    const nd=`${ny}-${String(nm).padStart(2,'0')}-01`;
+    const filter={and:[{property:'날짜',date:{on_or_after:`${yr}-${ms}-01`}},{property:'날짜',date:{before:nd}}]};
+    const chunk=await fetchAllPages(dbId,sorts,filter);
+    if(chunk.length){empty=0;allPages=allPages.concat(chunk);}else{empty++;}
+    mo--; if(mo===0){mo=12;yr--;}
+  }
+  return allPages;
 }
 function getVal(p){
   if(!p) return '';
@@ -1136,7 +1151,7 @@ async function loadData(){
   if(btn) btn.disabled=true; if(ico) ico.classList.add('spinning'); if(lab) lab.textContent='로딩…';
   IS_LOADING=true; renderByTab();
   try{
-    const pages=await fetchAllPages(CFG.issueDbId,[{property:'날짜',direction:'descending'},{timestamp:'created_time',direction:'ascending'}]);
+    const pages=await loadAllYears(CFG.issueDbId,[{property:'날짜',direction:'descending'}]);
     IS_DEMO=false; IS_LOADING=false;
     ISSUES=parseIssues(pages);
     DATE_YEAR=''; DATE_MONTH=''; DATE_DAY=null;
