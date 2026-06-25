@@ -371,7 +371,7 @@ let STOCK_Q  = '';
 let SEL_STOCK = '';
 
 // ── 기간 ──
-let SEL_PERIOD = '20';
+let SEL_PERIOD = '5';
 const PERIOD_OPTS = ['5','10','20','60','120','240','전체'];
 
 // ── 옵션 ──
@@ -514,6 +514,62 @@ function chgColor(n){ return n>0?'#D8302F':n<0?'#2563C9':'#7E8CA0'; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function distinctDatesDesc(rows){ return [...new Set(rows.map(r=>r.date).filter(Boolean))].sort((a,b)=>b.localeCompare(a)); }
 function fmtDateShort(d){ if(!d) return '-'; const m=d.match(/^(\d{4})-(\d{2})-(\d{2})/); return m?m[2]+'/'+m[3]:d; }
+
+// ── 한국 공휴일 2025~2027 (calendar 스킬 holidays.md 기준) ──
+const KR_HOLIDAYS = new Set([
+  '2025-01-01','2025-01-28','2025-01-29','2025-01-30',
+  '2025-03-01','2025-05-01','2025-05-05','2025-05-06',
+  '2025-06-06','2025-08-15','2025-10-03','2025-10-05',
+  '2025-10-06','2025-10-07','2025-10-08','2025-10-09','2025-12-25',
+  '2026-01-01','2026-02-16','2026-02-17','2026-02-18',
+  '2026-03-01','2026-03-02','2026-05-01','2026-05-05',
+  '2026-05-24','2026-05-25','2026-06-03','2026-06-06',
+  '2026-07-17','2026-08-15','2026-08-17','2026-09-24',
+  '2026-09-25','2026-09-26','2026-10-03','2026-10-05',
+  '2026-10-09','2026-12-25',
+  '2027-01-01','2027-02-06','2027-02-07','2027-02-08',
+  '2027-03-01','2027-05-01','2027-05-05','2027-05-13',
+  '2027-06-06','2027-08-15','2027-08-16','2027-09-14',
+  '2027-09-15','2027-09-16','2027-10-03','2027-10-04',
+  '2027-10-09','2027-12-25',
+]);
+function isTradingDay(dateStr){
+  const d=new Date(dateStr+'T00:00:00'); const dow=d.getDay();
+  return dow!==0 && dow!==6 && !KR_HOLIDAYS.has(dateStr);
+}
+function getMissingTradingDays(){
+  if(!ISSUES.length) return [];
+  const periodDates=getPeriodDates();
+  if(!periodDates.length) return [];
+  const haveDates=new Set(periodDates);
+  const latest=periodDates[0], earliest=periodDates[periodDates.length-1];
+  const start=new Date(earliest+'T00:00:00'), end=new Date(latest+'T00:00:00');
+  const missing=[], DN=['일','월','화','수','목','금','토'];
+  for(let cur=new Date(start); cur<=end; cur.setDate(cur.getDate()+1)){
+    const ds=cur.toISOString().slice(0,10);
+    if(isTradingDay(ds)&&!haveDates.has(ds)) missing.push({date:ds,day:DN[cur.getDay()]});
+  }
+  return missing;
+}
+function missingTradingDaysHtml(){
+  const missing=getMissingTradingDays();
+  if(!missing.length) return '';
+  const rowsHtml=missing.map(function(m){
+    const parts=m.date.split('-');
+    return '<tr>'
+      +'<td style="padding:5px 12px;font-weight:700;color:var(--txt)">'+parseInt(parts[1])+'/'+parseInt(parts[2])+'</td>'
+      +'<td style="padding:5px 12px;color:var(--txt3)">'+m.day+'요일</td>'
+      +'</tr>';
+  }).join('');
+  return '<div class="sc" style="border:1.5px solid #fca5a5;background:rgba(254,242,242,.5)">'
+    +'<div class="sc-title" style="color:#d8302f">✕ 누락된 영업일'
+    +' <span class="sub" style="color:#d8302f">DB에 데이터 없는 거래일 — '+missing.length+'일</span></div>'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr>'
+    +'<th style="padding:4px 12px;text-align:left;font-size:12px;color:var(--txt3);border-bottom:1px solid rgba(0,0,0,.06)">날짜</th>'
+    +'<th style="padding:4px 12px;text-align:left;font-size:12px;color:var(--txt3);border-bottom:1px solid rgba(0,0,0,.06)">요일</th>'
+    +'</tr></thead><tbody>'+rowsHtml+'</tbody></table>'
+    +'</div>';
+}
 function issueTrendSvg(trendDates, countMap){
   if(!trendDates.length) return '';
   const N=trendDates.length;
@@ -639,7 +695,7 @@ function issueCard(r){
     +'<div class="ic-badges">'+badges.join('')+'</div>'
     +(r.summary?'<div class="ic-summary">'+esc(r.summary)+'</div>':'')
     +(r.summary&&r.detail?'<div class="ic-divider"></div>':'')
-    +(r.detail?'<ul class="ic-detail">'+r.detail.split(/[.。]\s*/).filter(s=>s.trim()).map(s=>'<li>'+esc(s.trim())+'</li>').join('')+'</ul>':'')
+    +(r.detail?'<ul class="ic-detail">'+r.detail.split(/(?<!\d)[.。](?!\d)\s*/).filter(s=>s.trim()).map(s=>'<li>'+esc(s.trim())+'</li>').join('')+'</ul>':'')
     +'<div class="ic-foot"><div class="ic-meta">'+meta.join('')
     +(r.score!=null&&!isNaN(Number(r.score))?'<span class="ic-score">점수 '+Number(r.score)+'</span>':'')
     +'</div>'+(safeSrc?'<a class="ic-src" href="'+esc(safeSrc)+'" target="_blank" rel="noopener">기사 →</a>':'')
@@ -771,6 +827,7 @@ function renderFreq(){
   +DIRS.map(d=>dirMap[d]?distBar(d,dirMap[d],maxDir,safeColor(DIR_COLOR[d]||'#7E8CA0')):'').join('')
   +'</div></div>'
   +'</div>';
+  html+=missingTradingDaysHtml();
 
   panel.innerHTML=html;
 }
